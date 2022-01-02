@@ -86,6 +86,11 @@ We provide a low-resolution config file in `experiments/config/nerf/bacon_lr.ini
 To render output images from a trained model, use the `render_nerf.py` script.
 Note that the Blender synthetic datasets should be downloaded and the multiscale dataset generated before running this script.
 
+#### Initialization Scheme
+
+Finally, we also show a visualization of our initialization scheme in `experiments/plot_activation_distributions.py`. As shown in the paper, our initialization scheme prevents the distribution of activations from becoming vanishingly small, even for deep networks.
+
+
 #### Pretrained models
 
 For convenience, we include pretrained models for the SDF fitting and NeRF reconstruction tasks in the `pretrained_models` directory. 
