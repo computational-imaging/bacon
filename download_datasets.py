@@ -2,7 +2,11 @@ import gdown
 import zipfile
 import subprocess
 import urllib.request
+import os
 
+# Make folder to save data in. 
+os.makedirs('./data', exist_ok=True)
+    
 # nerf
 print('Downloading blender dataset')
 gdown.download("https://drive.google.com/uc?id=18JxhpWD-4ZmuFKLzKlAw-w5PpzZxXOcG", './data/nerf_synthetic.zip')
