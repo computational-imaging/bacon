@@ -64,6 +64,8 @@ p.add_argument('--centered', action='store_true', default=False,
                help='centere input coordinates as -1 to 1')
 p.add_argument('--img_fn', type=str, default='../data/lighthouse.png',
                help='path to specific png filename')
+p.add_argument('--grayscale', action='store_true', default=False,
+               help='if grayscale image')
 
 # summary, logging options
 p.add_argument('--steps_til_ckpt', type=int, default=100,
@@ -123,9 +125,9 @@ def init_dataloader(opt):
         url = None
 
     # init datasets
-    trn_dataset = dataio.ImageFile(opt.img_fn, grayscale=False, resolution=(opt.res, opt.res), url=url)
+    trn_dataset = dataio.ImageFile(opt.img_fn, grayscale=opt.grayscale, resolution=(opt.res, opt.res), url=url)
 
-    val_dataset = dataio.ImageFile(opt.img_fn, grayscale=False, resolution=(2*opt.res, 2*opt.res), url=url)
+    val_dataset = dataio.ImageFile(opt.img_fn, grayscale=opt.grayscale, resolution=(2*opt.res, 2*opt.res), url=url)
 
     trn_dataset = dataio.ImageWrapper(trn_dataset, centered=opt.centered,
                                       include_end=False,
@@ -145,6 +147,11 @@ def init_dataloader(opt):
 
 def init_model(opt):
 
+    if opt.grayscale:
+        out_features = 1
+    else:
+        out_features = 1
+
     if opt.model == 'mlp':
 
         if opt.multiscale:
@@ -154,7 +161,7 @@ def init_model(opt):
 
         model = m(nl=opt.activation,
                   in_features=2,
-                  out_features=3,
+                  out_features=out_features,
                   hidden_features=opt.hidden_features,
                   num_hidden_layers=opt.hidden_layers,
                   w0=opt.w0,
@@ -172,7 +179,7 @@ def init_model(opt):
         input_scales = [1/8, 1/8, 1/4, 1/4, 1/4]
         output_layers = [1, 2, 4]
 
-        model = m(2, opt.hidden_features, out_size=3,
+        model = m(2, opt.hidden_features, out_size=out_features,
                   hidden_layers=opt.hidden_layers,
                   bias=True,
                   frequency=(opt.res, opt.res),
