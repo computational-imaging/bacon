@@ -1,4 +1,4 @@
-# BACON: Band-limited Coordinate Networks for Multiscale Scene Representation
+# BACON: Band-limited Coordinate Networks for Multiscale Scene Representation | CVPR 2022 (oral)
 ### [Project Page](http://www.computationalimaging.org/publications/bacon/) | [Video](https://www.youtube.com/watch?v=zIH3KUCgJEA) | [Paper](https://arxiv.org/abs/2112.04645)
 Official PyTorch implementation of BACON.<br>
 [BACON: Band-limited Coordinate Networks for Multiscale Scene Representation](http://www.computationalimaging.org/publications/bacon/)<br>
