@@ -150,7 +150,7 @@ def init_model(opt):
     if opt.grayscale:
         out_features = 1
     else:
-        out_features = 1
+        out_features = 3
 
     if opt.model == 'mlp':
 

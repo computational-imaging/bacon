@@ -10,6 +10,7 @@ dependencies:
   - tensorboard-data-server=0.6.0
   - tensorboard-plugin-wit=1.6.0
   - torchvision=0.11.2
+  - pykdtree=1.3.4
   - pip
   - pip:
     - argparse==1.4.0
@@ -21,3 +22,4 @@ dependencies:
     - scipy==1.7.1
     - tqdm==4.62.3
     - trimesh==3.9.35
+    - setuptools==59.5.0
