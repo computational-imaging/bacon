@@ -5,4 +5,4 @@ Prerequisites:
 - install imagemagick and convert utility https://imagemagick.org/script/convert.php 
 - install chimerax from https://www.cgl.ucsf.edu/chimerax/ and make sure the executible is on the path as 'chimerax'
 
-Then, run `get_shape_spectra.py' which will run the model to extract the `armadillo` scene mesh and then visualize the fourier transform
+Then, run `get_shape_spectra.py` which will run the model to extract the `armadillo` scene mesh and then visualize the fourier transform
