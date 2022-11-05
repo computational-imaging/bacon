@@ -1,0 +1,366 @@
+#!/bin/bash
+#
+# Developed by Fred Weinhaus 11/2/2007 .......... revised 4/30/2015
+#
+# ------------------------------------------------------------------------------
+# 
+# Licensing:
+# 
+# Copyright © Fred Weinhaus
+# 
+# My scripts are available free of charge for non-commercial use, ONLY.
+# 
+# For use of my scripts in commercial (for-profit) environments or 
+# non-free applications, please contact me (Fred Weinhaus) for 
+# licensing arrangements. My email address is fmw at alink dot net.
+# 
+# If you: 1) redistribute, 2) incorporate any of these scripts into other 
+# free applications or 3) reprogram them in another scripting language, 
+# then you must contact me for permission, especially if the result might 
+# be used in a commercial or for-profit environment.
+# 
+# My scripts are also subject, in a subordinate manner, to the ImageMagick 
+# license, which can be found at: http://www.imagemagick.org/script/license.php
+# 
+# ------------------------------------------------------------------------------
+# 
+####
+#
+# USAGE: magicwand x,y [-t threshold] [-f format] [-r region] [-m mask] [-c color] [-o opacity] infile outfile
+# USAGE: magicwand [-h or -help]
+#
+# OPTIONS:
+#
+# x,y                    x,y location to get color and seed floodfill
+# -t      threshold      percent color disimilarity threshold (fuzz factor); 
+#                        values from 0 to 100; A value of 0 is an exact 
+#                        match and a value of 100 is any color; default=10
+# -f      format         output format; image or mask; default=image
+# -r      region         region to display; inside or outside; default=inside
+# -m      mask           mask type; transparent, binary, edge, overlay, layer;
+#                        default=transparent
+# -c      color          color for background, edge outline or translucent layer; 
+#                        color="none" indicates use opacity;
+#                        color="trans" indicates make background transparent;
+#                        default="black"
+# -o      opacity        opacity for transparent, overlay or layer mask; 
+#                        values from 0 to 100; default=0
+#
+###
+#
+# NAME: MAGICWAND
+# 
+# PURPOSE: To isolate a contiguous region of an image based upon a color determined 
+# from a user specified image coordinate.
+# 
+# DESCRIPTION: MAGICWAND determines a contiguous region of an image based
+# upon a color determined from a user specified image coordinate and a color
+# similarity threshold value (fuzz factor). The output can be either an
+# image or a mask. If the region is set to inside, then the image can be
+# made to mask out the background as transparent, mask out the background
+# using an opacity channel, fill the background with a color, display a 
+# boundary (outline) edge for the region or apply a translucent color layer
+# over the background. If the region is set to outside, then the inside will 
+# be masked and the outside area will show normally. Alternately, the output 
+# can be a mask which is either binary (black and white), transparent 
+# (transparent and white) or a boundary edge (white on black background). 
+# The boundary edge can be made to match the interior or exterior depending 
+# upon the region setting.
+# 
+# 
+# OPTIONS: 
+# 
+# x,y ... x,y are the coordinates in the image where the color is to be 
+# extracted and the floodfill is to be seeded.
+#
+# -f format ... FORMAT specifies whether the output will be the modified 
+# input image or a mask image. The choices are image or mask. The default 
+# is image.
+#
+# -r region ... REGION specifies whether the inside or outside are of the 
+# image will show and the other be masked. The choices are inside or 
+# outside. The default is inside.
+#
+# -m mask ... MASK specifies the type of mask to use or create. The choices 
+# are transparent, binary, edge, overlay or layer. Only transparent, binary or edge 
+# masks will be allowed as output. With a transparent mask, the image will be 
+# modified to mask out the complement of the regions specified according to the
+# color setting. Specify the color setting to 1) "trans" to make the background 
+# transparent, 2) "none" to mask by multiplying by the opacity setting or 
+# 3) a color value to use a fill color. With an overlay mask, which will only 
+# be effective on PNG format output images, the masking is done via the opacity 
+# channel using the opacity setting. With a layer mask, a translucent color will 
+# be layered over the background according to the color and opacity values. The 
+# larger the opacity, the lighter the color overlay and the more the image will 
+# show.
+# 
+# -c color ... COLOR is the color to be used for the background fill or 
+# the boundary edge overlaid on the image. Any IM color specification is 
+# valid or a value of none. Be sure to enclose them in double quotes. 
+# The color value over-rides the opacity for mask=transparent, so use 
+# color="none" to allow the opacity to work or use color="trans" to make 
+# the background transparent. The default="black".
+#
+# -o opacity ... OPACITY controls the degree of transparency for the area 
+# that is masked out using a mask setting of transparent, overlay or layer. 
+# A value of zero is fully transparent and a value of 100 is fully opaque.
+#
+# CAVEAT: No guarantee that this script will work on all platforms, 
+# nor that trapping of inconsistent parameters is complete and 
+# foolproof. Use At Your Own Risk. 
+# 
+######
+#
+
+# set default values
+threshold=10
+format="image"  # image or mask
+region="inside"  # inside or outside
+mask="trans"  # trans or binary or edge or overlay (overlay only if png)
+bgcolor="black"  # color or none when format=image
+opacity=0
+
+# set directory for temporary files
+dir="."    # suggestions are dir="." or dir="/tmp"
+
+
+# set up functions to report Usage and Usage with Description
+PROGNAME=`type $0 | awk '{print $3}'`  # search for executable on path
+PROGDIR=`dirname $PROGNAME`            # extract directory of program
+PROGNAME=`basename $PROGNAME`          # base name of program
+usage1() 
+	{
+	echo >&2 ""
+	echo >&2 "$PROGNAME:" "$@"
+	sed >&2 -e '1,/^####/d;  /^###/g;  /^#/!q;  s/^#//;  s/^ //;  4,$p' "$PROGDIR/$PROGNAME"
+	}
+usage2() 
+	{
+	echo >&2 ""
+	echo >&2 "$PROGNAME:" "$@"
+	sed >&2 -e '1,/^####/d;  /^######/g;  /^#/!q;  s/^#*//;  s/^ //;  4,$p' "$PROGDIR/$PROGNAME"
+	}
+
+
+# function to report error messages
+errMsg()
+	{
+	echo ""
+	echo $1
+	echo ""
+	usage1
+	exit 1
+	}
+
+
+# function to test for minus at start of value of second part of option 1 or 2
+checkMinus()
+	{
+	test=`echo "$1" | grep -c '^-.*$'`   # returns 1 if match; 0 otherwise
+    [ $test -eq 1 ] && errMsg "$errorMsg"
+	}
+
+# test for correct number of arguments and get values
+if [ $# -eq 0 ]
+	then
+	# help information
+   echo ""
+   usage2
+   exit 0
+elif [ $# -gt 15 ]
+	then
+	errMsg "--- TOO MANY ARGUMENTS WERE PROVIDED ---"
+else
+	while [ $# -gt 0 ]
+		do
+			# get parameter values
+			case "$1" in
+		  -h|-help)    # help information
+					   echo ""
+					   usage2
+					   exit 0
+					   ;;
+		 		-f)    # format
+					   shift  # to get the next parameter - format
+					   # test if parameter starts with minus sign 
+					   errorMsg="--- INVALID FORMAT SPECIFICATION ---"
+					   checkMinus "$1"
+					   # test region values
+					   format="$1"
+					   [ "$format" != "image" -a "$format" != "mask" ] && errMsg "--- FORMAT=$format IS NOT A VALID VALUE ---"
+					   ;;
+		 		-r)    # region
+					   shift  # to get the next parameter - region
+					   # test if parameter starts with minus sign 
+					   errorMsg="--- INVALID REGION SPECIFICATION ---"
+					   checkMinus "$1"
+					   # test region values
+					   region="$1"
+					   [ "$region" != "inside" -a "$region" != "outside" ] && errMsg "--- REGION=$region IS NOT A VALID VALUE ---"
+					   ;;
+		 		-m)    # mask
+					   shift  # to get the next parameter - mask
+					   # test if parameter starts with minus sign 
+					   errorMsg="--- INVALID MASK SPECIFICATION ---"
+					   checkMinus "$1"
+					   # test mask values
+					   mask="$1"
+					   [ "$mask" != "transparent" -a "$mask" != "binary" -a  "$mask" != "edge" -a "$mask" != "overlay" -a "$mask" != "layer" ] && errMsg "--- MASK=$mask IS NOT A VALID VALUE ---"
+					   [ "$mask" = "transparent" ] && mask="trans"
+					   ;;
+				-c)    # get color
+					   shift  # to get the next parameter - lineval
+					   # test if parameter starts with minus sign 
+					   errorMsg="--- INVALID COLOR SPECIFICATION ---"
+					   checkMinus "$1"
+					   bgcolor="$1"
+					   ;;
+				-t)    # get threshold
+					   shift  # to get the next parameter - threshold
+					   # test if parameter starts with minus sign 
+					   errorMsg="--- INVALID THRESHOLD SPECIFICATION ---"
+					   checkMinus "$1"
+					   # test threshold values
+					   threshold=`expr "$1" : '\([.0-9]*\)'`
+					   [ "$threshold" = "" ] && errMsg "THRESHOLD=$threshold IS NOT A NON-NEGATIVE FLOATING POINT NUMBER"
+		   			   thresholdtestA=`echo "$threshold < 0" | bc`
+		   			   thresholdtestB=`echo "$threshold > 100" | bc`
+					   [ $thresholdtestA -eq 1 -o $thresholdtestB -eq 1 ] && errMsg "--- THRESHOLD=$threshold MUST BE GREATER THAN OR EQUAL 0 AND LESS THAN OR EQUAL 100 ---"
+					   ;;
+				-o)    # get opacity
+					   shift  # to get the next parameter - opacity
+					   # test if parameter starts with minus sign 
+					   errorMsg="--- INVALID OPACITY SPECIFICATION ---"
+					   checkMinus "$1"
+					   # test width values
+					   opacity=`expr "$1" : '\([.0-9]*\)'`
+					   [ "$opacity" = "" ] && errMsg "OPACITY=$opacity IS NOT A NON-NEGATIVE FLOATING POINT NUMBER"
+		   			   opacitytestA=`echo "$opacity < 0" | bc`
+		   			   opacitytestB=`echo "$opacity > 100" | bc`
+					   [ $opacitytestA -eq 1 -o $opacitytestB -eq 1 ] && errMsg "--- OPACITY=$opacity MUST BE GREATER THAN OR EQUAL 0 AND LESS THAN OR EQUAL 100 ---"
+					   ;;
+ 				 -)    # STDIN, end of arguments
+  				 	   break
+  				 	   ;;
+				-*)    # any other - argument
+					   errMsg "--- UNKNOWN OPTION ---"
+					   ;;					   
+	 [0-9]*,[0-9]*)    # Values supplied for coordinates
+		   			   coords="$1"
+					   ;;
+		   	 .*,.*)    # Bogus Values supplied
+		   	   		   errMsg "--- COORDINATES ARE NOT VALID ---"
+		   	   		   ;;
+		     	 *)    # end of arguments
+					   break
+					   ;;
+			esac
+			shift   # next option
+	done
+	#
+	# get infile and outfile
+	infile="$1"
+	outfile="$2"
+fi
+
+
+# test that infile provided
+[ "$infile" = "" ] && errMsg "NO INPUT FILE SPECIFIED"
+
+# test that outfile provided
+[ "$outfile" = "" ] && errMsg "NO OUTPUT FILE SPECIFIED"
+
+tmpA="$dir/magicwand_$$.mpc"
+tmpB="$dir/magicwand_$$.cache"
+tmp0="$dir/magicwand_0_$$.png"
+trap "rm -f $tmpA $tmpB $tmp0;" 0
+trap "rm -f $tmpA $tmpB $tmp0; exit 1" 1 2 3 15
+trap "rm -f $tmpA $tmpB $tmp0; exit 1" ERR
+
+if convert -quiet "$infile" +repage "$tmpA"
+	then
+		width=`identify -format %w $tmpA`
+		height=`identify -format %h $tmpA`
+		[ "$coords" = "" ] && errMsg "--- NO COORDINATES PROVIDED ---"
+	else
+		errMsg "--- FILE $infile DOES NOT EXIST OR IS NOT AN ORDINARY FILE, NOT READABLE OR HAS ZERO SIZE ---"
+fi
+
+
+# get im_version
+im_version=`convert -list configure | \
+	sed '/^LIB_VERSION_NUMBER /!d; s//,/;  s/,/,0/g;  s/,0*\([0-9][0-9]\)/\1/g' | head -n 1`
+
+# set up floodfill
+if [ "$im_version" -ge "07000000" ]; then
+	matte_alpha="alpha"
+else
+	matte_alpha="alpha"
+fi
+
+# create transparent mask for region=inside
+	# make interior transparent and outside black
+	convert $tmpA -fuzz $threshold% -fill none -draw "$matte_alpha $coords floodfill" \
+		-fill black +opaque none $tmp0
+		
+# create negative mask - for region=outside
+if [ "$region" = "outside" ]
+	then
+	convert $tmp0 -channel rgba \
+		-fill white -opaque none \
+		-transparent black \
+		-fill black -opaque white $tmp0
+
+fi
+
+
+# convert mask to binary if appropriate
+if [ "$mask" != "trans" -a "$mask" != "layer" ]
+	then
+	# make transparent go to white
+	convert \( -size ${width}x${height} xc:white \) $tmp0 \
+	-composite $tmp0
+fi
+
+
+#convert mask to edge if appropriate
+if [ "$mask" = "edge" ]
+	then
+	convert $tmp0 -convolve "-1,-1,-1,-1,8,-1,-1,-1,-1" -clamp $tmp0
+fi
+
+
+# process image if appropriate
+if [ "$format" = "image" -a "$mask" = "edge" ]
+	then
+	convert $tmpA \( $tmp0 -transparent black -fill $bgcolor -opaque white \) -composite $tmp0
+	
+elif [ "$format" = "image" -a "$mask" = "trans" ]
+	then
+	# composite with input and set background
+	if [ "$bgcolor" = "trans" ]
+		then 
+		convert $tmpA $tmp0 -composite -transparent black $tmp0
+	elif [ "$bgcolor" = "none" ]
+		then 
+		convert $tmpA \( $tmp0 -fill "rgb($opacity%,$opacity%,$opacity%)" -opaque black \) -compose Multiply -composite $tmp0
+	else
+		convert $tmpA $tmp0 -composite -fill $bgcolor -opaque black $tmp0
+	fi
+	
+elif [ "$format" = "image"  -a "$mask" = "overlay" ]
+	then
+	convert $tmpA \( $tmp0 -fill "rgb($opacity%,$opacity%,$opacity%)" -opaque black \) -compose Copy_Opacity -composite $tmp0
+
+elif [ "$format" = "image"  -a "$mask" = "layer" ]
+	then
+	opacity=`expr 100 - $opacity`
+	convert $tmp0 -fill $bgcolor -opaque black $tmp0
+	if [ "$im_version" -lt "06050304" ]; then
+		composite -dissolve $opacity% $tmp0 $tmpA $tmp0
+	else
+		convert $tmpA $tmp0 -define compose:args=$opacity% -compose dissolve -composite $tmp0
+	fi
+fi
+convert $tmp0 "$outfile"
+exit 0
